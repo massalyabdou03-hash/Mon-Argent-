@@ -1014,6 +1014,7 @@ function renderSettings(){
       '<div class="fld"><label for="set-save">Épargne</label><input class="inp" id="set-save" type="number" value="'+sp.save+'" readonly aria-readonly="true"></div>'+
     '</div><p class="hint" id="split-note" role="status" hidden></p></div>'+
    '</div>'+
+   '<button class="btn primary" type="button" data-act="settings-save" style="width:100%;margin-top:16px">Enregistrer le budget</button>'+
    '<p class="hint">'+(S.mode==='cloud'?'Tes données sont privées : seul ton compte les voit, et elles te suivent d’un appareil à l’autre.':'Tes données restent sur cet appareil. Ouvre la page connecté pour les retrouver partout.')+'</p>';
 }
 function renderObjectifs(){renderGoals();renderRevenue();renderSettings();}
@@ -1027,7 +1028,7 @@ function renderAll(){
 }
 function setView(v){
   const a=document.activeElement;
-  if(a&&SETTING_IDS.indexOf(a.id)>-1){commitSettings(false);a.blur();}
+  if(a&&SETTING_IDS.indexOf(a.id)>-1){commitSettings();a.blur();}
   S.view=v;
   ['argent','apercu','planning','objectifs'].forEach(n=>{$('#v-'+n).hidden=n!==v;});
   $$('.tab').forEach(t=>{if(t.dataset.view===v)t.setAttribute('aria-current','page');else t.removeAttribute('aria-current');});
@@ -1235,8 +1236,9 @@ function catBudgetForm(id){
   });
 }
 const SETTING_IDS=['set-income','set-needs','set-biz'];
-/* full=false pendant la frappe : on enregistre sans réafficher la vue (sinon le champ perd le focus) */
-function commitSettings(full){
+/* Ne jamais redessiner la carte Réglages ici : sinon le champ que l'on vient de toucher
+   est remplacé et la saisie est perdue. On met à jour Épargne, le message et les autres cartes. */
+function commitSettings(){
   if(!$('#set-income'))return;
   const income=parseInt(($('#set-income').value||'').replace(/\D/g,'')||'0',10);
   const needs=parseInt($('#set-needs').value,10),biz=parseInt($('#set-biz').value,10);
@@ -1244,14 +1246,13 @@ function commitSettings(full){
   S.settings.income=income>0?income:S.settings.income;
   S.settings.split=sanitizeSplit({needs:n,biz:b});
   S.settingsTouched=true;markDirty('settings');
-  if(full){renderObjectifs();return;}
   const sp=S.settings.split,note=$('#split-note');
   $('#set-save').value=sp.save;
   if(clamp(n,0,100)+Math.max(0,b)>100){
     note.textContent='Besoins + Business dépassent 100 % : Business est ramené à '+sp.biz+' %.';
     note.hidden=false;
   }else note.hidden=true;
-  renderRevenue();
+  renderGoals();renderRevenue();
 }
 
 /* ---------- événements ---------- */
@@ -1287,12 +1288,18 @@ document.addEventListener('click',e=>{
     case 'tpl-save':saveTemplate();break;
     case 'goal-add':goalForm(null,t.dataset.name);break;
     case 'goal-edit':{const g=goalById(id);if(g)goalForm(g);break;}
+    case 'settings-save':{
+      const a=document.activeElement;if(a&&a.blur)a.blur();
+      commitSettings();renderSettings();
+      toast('Budget enregistré : '+fmt(S.settings.income)+' FCFA par mois');
+      break;
+    }
     case 'sheet-close':closeSheet();break;
     case 'undo':{const f=toastUndo;$('#toast').hidden=true;toastUndo=null;if(f)f();break;}
   }
 });
 document.addEventListener('change',e=>{
-  if(SETTING_IDS.indexOf(e.target.id)>-1)commitSettings(true);
+  if(SETTING_IDS.indexOf(e.target.id)>-1)commitSettings();
 });
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'&&!$('#sheet').hidden)closeSheet();
@@ -1302,7 +1309,7 @@ document.addEventListener('input',e=>{
     const d=e.target.value.replace(/\D/g,'').slice(0,9);
     e.target.value=d?fmt(parseInt(d,10)):'';
   }
-  if(SETTING_IDS.indexOf(e.target.id)>-1)commitSettings(false);
+  if(SETTING_IDS.indexOf(e.target.id)>-1)commitSettings();
 });
 
 /* ---------- démarrage ---------- */
